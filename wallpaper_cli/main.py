@@ -1,53 +1,62 @@
 import sys
-import requests
-import json
+from typing import List
+import aiohttp
+import asyncio
+import aiofiles
 import os
+import json
+
+home_directory = os.path.expanduser("~")
 
 
-def get_urls(tags: str) -> list:
+async def get_urls(tags: str) -> list:
     wall_list = []
     url = f"https://wallhaven.cc/api/v1/search?q={tags}&sorting=random"
     print(url)
-    res = requests.get(url)
-
-    if res.status_code == 200:
-        try:
-            json_res = res.json()
-            for i in json_res['data']:
-                wall_list.append(i['path'])
-
-        except json.JSONDecodeError as e:
-            print("JSONDecoder", e)
-            print("Content:", res.content)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                try:
+                    json_res = await response.json()
+                    for i in json_res['data']:
+                        wall_list.append(i['path'])
+                except json.JSONDecodeError as e:
+                    print(f"Error with json data {e}")
+                    print(f"Content: { await response.text()}")
     return wall_list
 
-
-def download_walls(wall_urls: list) -> None:
-    if not os.path.exists("./walls"):
-        os.makedirs("./walls")
-    for url in wall_urls:
-        res = requests.get(url)
-
-        if res.status_code == 200:
-            filename = os.path.join("./walls", url.split('/')[-1])
-            with open(filename, "wb") as f:
-                f.write(res.content)
+async def download_wall(url: str) -> None:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as res:
+            if res.status == 200:
+                filename = os.path.join(f"{home_directory}/walls/", url.split('/')[-1])
+                async with aiofiles.open(filename, "wb") as f:
+                    await f.write(await res.read())
                 print(f"Downloaded: {filename}")
+            else:
+                print(f"failed to download {url}: status code: {res.status}")
 
-        else:
-            print("Failed")
 
 
-def main():
-    tags = sys.argv[1:]
+async def download_walls(wall_urls: list) -> None:
+    if not os.path.exists(f"{home_directory}/walls"):
+        os.makedirs(f"{home_directory}/walls")
+    tasks = [download_wall(url) for url in wall_urls]
+    await asyncio.gather(*tasks)
 
-    tags = ",".join(tags)
-    print(tags, type(tags))
+async def main(tag: List[str]):
+    tags = " ".join(tag)
 
-    wallpaper_list = get_urls(tags)
+    wall_urls = await get_urls(tags)
+    await download_walls(wall_urls)
 
-    download_walls(wallpaper_list)
+
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        print("Usage : python main.py <tags>" )
+        sys.exit()
+    else:
+        tags = sys.argv[1:]
+        asyncio.run(main(tags))
