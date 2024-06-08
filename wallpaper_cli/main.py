@@ -5,6 +5,7 @@ import asyncio
 import aiofiles
 import os
 import json
+import argparse
 
 home_directory = os.path.expanduser("~")
 RATE_LIMIT = 45
@@ -54,17 +55,27 @@ async def download_walls(wall_urls: list) -> None:
     await asyncio.gather(*tasks)
 
 
-async def main(tag: List[str]):
+async def run(tag: List[str]):
     tags = " ".join(tag)
 
     wall_urls = await get_urls(tags)
     await download_walls(wall_urls)
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(
+        prog="Wall CLI",
+        description="""A tool to download multiple wallpapers for your system""",
+    )
+
+    parser.add_argument("tags", nargs="+", help="Tags to search for")
+    args = parser.parse_args()
     if len(sys.argv) < 2:
         print("Usage : python main.py <tags>")
         sys.exit()
     else:
-        tags = sys.argv[1:]
-        asyncio.run(main(tags))
+        asyncio.run(run(args.tags))
+
+
+if __name__ == "__main__":
+    main()
